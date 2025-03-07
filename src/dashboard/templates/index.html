@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Echelon - Google Ads AI Optimization</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .logo {
+            max-width: 200px;
+            margin-bottom: 20px;
+        }
+        .account-card {
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+            cursor: pointer;
+        }
+        .account-card:hover {
+            transform: translateY(-5px);
+        }
+        .main-container {
+            max-width: 800px;
+            margin: 80px auto;
+        }
+        .header {
+            margin-bottom: 40px;
+            text-align: center;
+        }
+        .flash-messages {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container main-container">
+        <div class="header">
+            <h1><i class="fas fa-chart-line text-primary"></i> Echelon</h1>
+            <p class="lead">Google Ads AI-Powered Optimization Dashboard</p>
+        </div>
+
+        <!-- Flash Messages -->
+        <div class="flash-messages">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+        </div>
+
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Select Account</h5>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('select_account') }}" method="post">
+                    <div class="mb-3">
+                        <label for="account_select" class="form-label">Choose an account to view:</label>
+                        <select class="form-select" id="account_select" name="account_id" required>
+                            <option value="">Select an account...</option>
+                            {% for account in accounts %}
+                                <option value="{{ account.account_id }}">{{ account.account_name }} ({{ account.account_id }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-sign-in-alt"></i> View Dashboard
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="mt-4 text-center text-muted">
+            <small>Echelon Google Ads Management System &copy; 2023</small>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> 

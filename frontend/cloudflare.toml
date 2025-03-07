@@ -1,0 +1,16 @@
+[build]
+  command = "npm run build"
+  publish = "build"
+
+[build.environment]
+  NODE_VERSION = "16"
+
+[site]
+  bucket = "./build"
+  entry-point = "workers-site"
+
+[env.production]
+  REACT_APP_API_URL = "https://api.echelon-ads.com"
+
+[env.staging]
+  REACT_APP_API_URL = "https://api-staging.echelon-ads.com" 

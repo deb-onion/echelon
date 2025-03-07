@@ -1,0 +1,50 @@
+# Google Ads API Configuration
+
+# OAuth2 configuration
+developer_token: "INSERT_DEVELOPER_TOKEN_HERE"
+client_id: "INSERT_OAUTH2_CLIENT_ID_HERE"
+client_secret: "INSERT_OAUTH2_CLIENT_SECRET_HERE"
+refresh_token: "INSERT_OAUTH2_REFRESH_TOKEN_HERE"
+
+# API settings
+login_customer_id: "INSERT_LOGIN_CUSTOMER_ID_HERE" # MCC account ID without dashes
+use_proto_plus: true # Use proto plus for nicer Python bindings
+
+# Connection settings
+timeout_seconds: 60
+retry_count: 3
+retry_delay_multiplier: 1.5
+http_proxy: null
+api_version: "v13" # Update this to the most recent API version as needed
+
+# Logging configuration
+logging:
+  version: 1
+  disable_existing_loggers: false
+  formatters:
+    simple:
+      format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  handlers:
+    console:
+      class: logging.StreamHandler
+      level: INFO
+      formatter: simple
+      stream: ext://sys.stdout
+    file:
+      class: logging.FileHandler
+      level: DEBUG
+      formatter: simple
+      filename: logs/googleads_api.log
+  loggers:
+    google.ads.googleads:
+      level: INFO
+      handlers: [console, file]
+      propagate: false
+    google.auth:
+      level: INFO
+      handlers: [console, file]
+      propagate: false
+  root:
+    level: INFO
+    handlers: [console, file]
+    propagate: false 

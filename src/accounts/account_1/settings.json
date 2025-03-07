@@ -1,0 +1,50 @@
+{
+    "account_id": "123-456-7890",
+    "account_name": "Example Account",
+    "currency": "USD",
+    "time_zone": "America/New_York",
+    "optimization_settings": {
+        "bid_adjustment_threshold": 10,
+        "budget_adjustment_threshold": 15,
+        "max_bid_increase_percent": 20,
+        "max_bid_decrease_percent": 20,
+        "max_budget_increase_percent": 30,
+        "max_budget_decrease_percent": 20,
+        "optimization_frequency": "daily"
+    },
+    "bidding_settings": {
+        "default_bid_amount": 1.0,
+        "default_bidding_strategy": "MANUAL_CPC",
+        "default_target_cpa": null,
+        "default_target_roas": null
+    },
+    "targeting_settings": {
+        "default_geo_targets": [
+            {"location_id": 2840, "targeting_type": "LOCATION_OF_PRESENCE"}
+        ],
+        "default_language_ids": [1000],
+        "default_audience_ids": []
+    },
+    "notification_settings": {
+        "email_notifications": true,
+        "notification_email": "your.email@example.com",
+        "slack_notifications": false,
+        "slack_webhook_url": null,
+        "notification_threshold": "high_impact_only"
+    },
+    "reporting_settings": {
+        "generate_daily_reports": true,
+        "report_file_format": "csv",
+        "performance_metrics": [
+            "impressions",
+            "clicks",
+            "cost",
+            "conversions",
+            "conversion_value",
+            "ctr",
+            "cpc",
+            "conversion_rate",
+            "roas"
+        ]
+    }
+} 
