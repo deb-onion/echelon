@@ -35,17 +35,16 @@ class MerchantCenterClient:
     from Google Merchant Center, as well as methods to upload and update feeds.
     """
     
-    def __init__(self, config_dir: str, merchant_id: str):
+    def __init__(self, config_path: str = None, merchant_id: str = None):
         """
         Initialize the Merchant Center client.
         
         Args:
-            config_dir: Directory containing Google API configuration
+            config_path: Path to the Google API configuration
             merchant_id: Merchant Center account ID
         """
         self.merchant_id = merchant_id
-        self.config_dir = config_dir
-        self.request_handler = RequestHandler()
+        self.config_path = config_path or os.getenv("GOOGLE_ADS_CONFIG_DIR", "./google-ads.yaml")
         self.content_api = None
         self.shopping_api = None
         
@@ -55,17 +54,9 @@ class MerchantCenterClient:
     def _initialize_apis(self):
         """Initialize the Content and Shopping APIs with credentials."""
         try:
-            # Get credentials from the shared authentication module
-            # This assumes authentication.py has been extended to support Merchant Center
-            google_ads_client, _ = get_authenticated_client(
-                config_dir=self.config_dir, 
-                account_id=None
-            )
-            
-            # Extract credentials from the Google Ads client
-            # In a real implementation, you might need to handle this differently
-            # depending on how get_authenticated_client returns credentials
-            credentials = google_ads_client._credentials
+            # In a real implementation, you would use proper authentication
+            # This is a simplified version for demonstration purposes
+            credentials = self._get_credentials()
             
             # Build the Content API client (for product management)
             self.content_api = build('content', 'v2.1', credentials=credentials)
@@ -79,7 +70,27 @@ class MerchantCenterClient:
             logger.error(f"Failed to initialize Merchant Center client: {str(e)}")
             raise
     
-    @with_retry(max_retries=3, retry_delay=2.0)
+    def _get_credentials(self):
+        """
+        Get OAuth2 credentials for Google APIs.
+        
+        In a real implementation, this would use proper OAuth2 flow.
+        For demonstration, we're using a simplified approach.
+        
+        Returns:
+            OAuth2 credentials
+        """
+        # This is a placeholder for real credential retrieval
+        # In a real implementation, you would use proper OAuth flow
+        try:
+            return Credentials.from_authorized_user_info(
+                info=json.loads(os.getenv("GOOGLE_API_CREDENTIALS", "{}")),
+                scopes=['https://www.googleapis.com/auth/content']
+            )
+        except Exception as e:
+            logger.error(f"Failed to get credentials: {str(e)}")
+            raise
+    
     def get_merchant_accounts(self) -> List[Dict]:
         """
         Get all Merchant Center accounts accessible to the authenticated user.
@@ -106,7 +117,6 @@ class MerchantCenterClient:
             logger.error(f"Error fetching merchant accounts: {str(e)}")
             raise
     
-    @with_retry(max_retries=3, retry_delay=2.0)
     def get_account_summary(self) -> Dict:
         """
         Get a summary of the Merchant Center account including product counts.
@@ -164,7 +174,6 @@ class MerchantCenterClient:
             logger.error(f"Error fetching account summary: {str(e)}")
             raise
     
-    @with_retry(max_retries=3, retry_delay=2.0)
     def get_feeds(self) -> List[Dict]:
         """
         Get all feeds for the Merchant Center account.
@@ -217,7 +226,6 @@ class MerchantCenterClient:
             logger.error(f"Error fetching feeds: {str(e)}")
             raise
     
-    @with_retry(max_retries=3, retry_delay=2.0)
     def get_products(self, 
                      page: int = 1, 
                      limit: int = 50, 
@@ -332,7 +340,6 @@ class MerchantCenterClient:
             logger.error(f"Error fetching products: {str(e)}")
             raise
     
-    @with_retry(max_retries=3, retry_delay=2.0)
     def get_product_issues(self) -> List[Dict]:
         """
         Get aggregated product issues from the Merchant Center account.
@@ -388,7 +395,6 @@ class MerchantCenterClient:
             logger.error(f"Error fetching product issues: {str(e)}")
             raise
     
-    @with_retry(max_retries=3, retry_delay=2.0)
     def upload_feed(self, 
                     feed_type: str, 
                     file_content: bytes,

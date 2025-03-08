@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from 'react-query';
 import {
   Box,
   Typography,
@@ -26,7 +27,12 @@ import {
   DialogTitle,
   Tabs,
   Tab,
-  Divider
+  Divider,
+  MenuItem,
+  TablePagination,
+  FormControl,
+  InputLabel,
+  Select
 } from '@mui/material';
 import {
   ShoppingBag as MerchantIcon,
@@ -37,861 +43,613 @@ import {
   Search as SearchIcon,
   FilterList as FilterIcon,
   CloudUpload as UploadIcon,
-  Schedule as ScheduleIcon
+  Schedule as ScheduleIcon,
+  UploadFile
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
+import { Bar, Pie } from 'react-chartjs-2';
+import { Chart, registerables } from 'chart.js';
+import { useTheme } from '@mui/material/styles';
+import Layout from '../components/Layout';
+
+// Register Chart.js components
+Chart.register(...registerables);
+
+// Tab Panel component
+function TabPanel(props) {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`merchant-tabpanel-${index}`}
+      aria-labelledby={`merchant-tab-${index}`}
+      {...other}
+    >
+      {value === index && (
+        <Box sx={{ p: 3 }}>
+          {children}
+        </Box>
+      )}
+    </div>
+  );
+}
 
 const MerchantFeedDashboard = () => {
   const { account } = useAuth();
   const navigate = useNavigate();
+  const theme = useTheme();
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [activeTab, setActiveTab] = useState(0);
   const [merchantAccounts, setMerchantAccounts] = useState([]);
-  const [selectedMerchantId, setSelectedMerchantId] = useState('');
+  const [selectedMerchant, setSelectedMerchant] = useState('');
+  const [accountSummary, setAccountSummary] = useState(null);
   const [feeds, setFeeds] = useState([]);
   const [products, setProducts] = useState([]);
-  const [productIssues, setProductIssues] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [tabValue, setTabValue] = useState(0);
-  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [issues, setIssues] = useState([]);
+  const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [statusFilter, setStatusFilter] = useState('');
   const [uploadLoading, setUploadLoading] = useState(false);
-  
+  const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [uploadError, setUploadError] = useState(null);
+  const [feedFile, setFeedFile] = useState(null);
+  const [feedType, setFeedType] = useState('PRIMARY');
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [productFilter, setProductFilter] = useState('all');
+
   // Fetch merchant accounts
-  useEffect(() => {
-    const fetchMerchantAccounts = async () => {
-      setLoading(true);
-      try {
-        // In a real implementation, this would be an API call
-        // const response = await api.merchant.getAccounts(account);
-        // setMerchantAccounts(response.data.accounts);
-        
-        // Simulate API response
-        setTimeout(() => {
-          const demoAccounts = [
-            { 
-              id: 'merchant1', 
-              name: 'Main E-commerce Store', 
-              domain: 'yourstore.com',
-              accountStatus: 'ACTIVE',
-              totalProducts: 542,
-              approvedProducts: 498,
-              disapprovedProducts: 32,
-              pendingProducts: 12
-            },
-            { 
-              id: 'merchant2', 
-              name: 'Seasonal Products Store', 
-              domain: 'seasonalproducts.com',
-              accountStatus: 'ACTIVE',
-              totalProducts: 189,
-              approvedProducts: 172,
-              disapprovedProducts: 8,
-              pendingProducts: 9
-            }
-          ];
-          
-          setMerchantAccounts(demoAccounts);
-          if (demoAccounts.length > 0) {
-            setSelectedMerchantId(demoAccounts[0].id);
-            fetchFeedData(demoAccounts[0].id);
-          } else {
-            setLoading(false);
-          }
-        }, 1000);
-      } catch (error) {
-        console.error('Error fetching merchant accounts:', error);
-        setLoading(false);
-      }
-    };
-    
-    if (account) {
-      fetchMerchantAccounts();
+  const { 
+    data: merchantAccountsData = [], 
+    isLoading: isLoadingMerchants, 
+    error: merchantError 
+  } = useQuery('merchantAccounts', async () => {
+    const response = await api.merchant.getAccounts();
+    if (response.data.length > 0 && !selectedMerchant) {
+      setSelectedMerchant(response.data[0].id);
     }
-  }, [account]);
-  
-  // Fetch feed data when a merchant account is selected
-  const fetchFeedData = async (merchantId) => {
-    setLoading(true);
-    try {
-      // In a real implementation, this would be API calls
-      // const feedsResponse = await api.merchant.getFeeds(merchantId);
-      // const productsResponse = await api.merchant.getProducts(merchantId);
-      // const issuesResponse = await api.merchant.getProductIssues(merchantId);
+    return response.data;
+  });
+
+  // Fetch merchant account summary
+  const { 
+    data: accountSummaryData, 
+    isLoading: isLoadingSummary 
+  } = useQuery(
+    ['merchantSummary', selectedMerchant],
+    async () => {
+      if (!selectedMerchant) return null;
+      const response = await api.merchant.getAccountSummary(selectedMerchant);
+      return response.data;
+    },
+    { enabled: !!selectedMerchant }
+  );
+
+  // Fetch merchant feeds
+  const { 
+    data: feedsData = [], 
+    isLoading: isLoadingFeeds 
+  } = useQuery(
+    ['merchantFeeds', selectedMerchant],
+    async () => {
+      if (!selectedMerchant) return [];
+      const response = await api.merchant.getFeeds(selectedMerchant);
+      return response.data;
+    },
+    { enabled: !!selectedMerchant }
+  );
+
+  // Fetch products with filter
+  const { 
+    data: productsData = { products: [], pagination: { page: 1, limit: 50, total: 0, hasMore: false } }, 
+    isLoading: isLoadingProducts,
+    refetch: refetchProducts
+  } = useQuery(
+    ['merchantProducts', selectedMerchant, page, productFilter],
+    async () => {
+      if (!selectedMerchant) return { products: [], pagination: { page: 1, limit: 50, total: 0, hasMore: false } };
+      const status = productFilter !== 'all' ? productFilter : null;
+      const response = await api.merchant.getProducts(selectedMerchant, page, 50, status);
+      return response.data;
+    },
+    { enabled: !!selectedMerchant && activeTab === 1 }
+  );
+
+  // Fetch aggregated issues
+  const { 
+    data: issuesData = [], 
+    isLoading: isLoadingIssues 
+  } = useQuery(
+    ['merchantIssues', selectedMerchant],
+    async () => {
+      if (!selectedMerchant) return [];
+      const response = await api.merchant.getIssues(selectedMerchant);
+      return response.data;
+    },
+    { enabled: !!selectedMerchant && activeTab === 2 }
+  );
+
+  // Feed upload mutation
+  const uploadFeedMutation = useMutation(
+    async () => {
+      if (!feedFile || !selectedMerchant) return;
       
-      // Simulate API responses
-      setTimeout(() => {
-        // Simulated feeds
-        const demoFeeds = [
-          {
-            id: 'feed1',
-            name: 'Primary Product Feed',
-            feedType: 'PRIMARY',
-            fileType: 'CSV',
-            lastUploadDate: '2023-07-05T14:30:00Z',
-            status: 'PROCESSED',
-            itemsTotal: 542,
-            itemsProcessed: 542,
-            itemsSuccessful: 498,
-            itemsWithWarnings: 12,
-            itemsWithErrors: 32,
-            targetCountries: ['US', 'CA'],
-            processingStatus: 'SUCCESS'
-          },
-          {
-            id: 'feed2',
-            name: 'Inventory Updates',
-            feedType: 'INVENTORY',
-            fileType: 'CSV',
-            lastUploadDate: '2023-07-06T08:15:00Z',
-            status: 'PROCESSED',
-            itemsTotal: 542,
-            itemsProcessed: 542,
-            itemsSuccessful: 540,
-            itemsWithWarnings: 2,
-            itemsWithErrors: 0,
-            targetCountries: ['US', 'CA'],
-            processingStatus: 'SUCCESS'
-          },
-          {
-            id: 'feed3',
-            name: 'Price Updates',
-            feedType: 'PRICE',
-            fileType: 'CSV',
-            lastUploadDate: '2023-07-06T08:30:00Z',
-            status: 'PROCESSED',
-            itemsTotal: 542,
-            itemsProcessed: 542,
-            itemsSuccessful: 542,
-            itemsWithWarnings: 0,
-            itemsWithErrors: 0,
-            targetCountries: ['US', 'CA'],
-            processingStatus: 'SUCCESS'
-          },
-          {
-            id: 'feed4',
-            name: 'Supplemental Feed',
-            feedType: 'SUPPLEMENTAL',
-            fileType: 'CSV',
-            lastUploadDate: '2023-07-01T10:00:00Z',
-            status: 'PROCESSED',
-            itemsTotal: 120,
-            itemsProcessed: 120,
-            itemsSuccessful: 118,
-            itemsWithWarnings: 0,
-            itemsWithErrors: 2,
-            targetCountries: ['US'],
-            processingStatus: 'SUCCESS'
-          }
-        ];
-        
-        // Simulated product sample
-        const demoProducts = [
-          {
-            id: 'product1',
-            title: 'Premium Wireless Headphones',
-            link: 'https://www.example.com/headphones',
-            price: {
-              value: 129.99,
-              currency: 'USD'
-            },
-            availability: 'in stock',
-            imageLink: 'https://www.example.com/images/headphones.jpg',
-            gtin: '885909456321',
-            brand: 'AudioPlus',
-            status: 'approved',
-            issues: []
-          },
-          {
-            id: 'product2',
-            title: 'Ultra HD Smart TV 55"',
-            link: 'https://www.example.com/tv',
-            price: {
-              value: 699.99,
-              currency: 'USD'
-            },
-            availability: 'in stock',
-            imageLink: 'https://www.example.com/images/tv.jpg',
-            gtin: '885909123456',
-            brand: 'VisionTech',
-            status: 'approved',
-            issues: []
-          },
-          {
-            id: 'product3',
-            title: 'Smartphone Charging Cable',
-            link: 'https://www.example.com/cable',
-            price: {
-              value: 12.99,
-              currency: 'USD'
-            },
-            availability: 'in stock',
-            imageLink: 'https://www.example.com/images/cable.jpg',
-            gtin: '',
-            brand: 'PowerCharge',
-            status: 'disapproved',
-            issues: [
-              {
-                code: 'missing_gtin',
-                severity: 'error',
-                resolution: 'Add a valid GTIN'
-              }
-            ]
-          },
-          {
-            id: 'product4',
-            title: 'Bluetooth Portable Speaker',
-            link: 'https://www.example.com/speaker',
-            price: {
-              value: 49.99,
-              currency: 'USD'
-            },
-            availability: 'out of stock',
-            imageLink: 'https://www.example.com/images/speaker.jpg',
-            gtin: '885909987654',
-            brand: 'AudioPlus',
-            status: 'disapproved',
-            issues: [
-              {
-                code: 'availability_not_supported',
-                severity: 'error',
-                resolution: 'Update availability to "in stock" or "preorder"'
-              }
-            ]
-          },
-          {
-            id: 'product5',
-            title: 'Ergonomic Office Chair',
-            link: 'https://www.example.com/chair',
-            price: {
-              value: 249.99,
-              currency: 'USD'
-            },
-            availability: 'in stock',
-            imageLink: 'https://www.example.com/images/chair.jpg',
-            gtin: '885909556677',
-            brand: 'ComfortPlus',
-            status: 'pending',
-            issues: []
-          }
-        ];
-        
-        // Simulated product issues summary
-        const demoIssues = [
-          {
-            code: 'missing_gtin',
-            severity: 'error',
-            count: 15,
-            description: 'Missing GTIN (barcode)',
-            resolution: 'Add a valid GTIN/UPC/EAN to affected products',
-            affectedSample: ['Smartphone Charging Cable', 'USB Wall Adapter', 'HDMI Cable 6ft']
-          },
-          {
-            code: 'invalid_price',
-            severity: 'error',
-            count: 8,
-            description: 'Price is missing or invalid',
-            resolution: 'Update product prices with valid values',
-            affectedSample: ['Wireless Mouse', 'Gaming Headset']
-          },
-          {
-            code: 'availability_not_supported',
-            severity: 'error',
-            count: 9,
-            description: 'Availability status not supported',
-            resolution: 'Update availability to "in stock" or "preorder"',
-            affectedSample: ['Bluetooth Portable Speaker', 'Smart Watch']
-          },
-          {
-            code: 'image_too_small',
-            severity: 'warning',
-            count: 12,
-            description: 'Product image size too small',
-            resolution: 'Use higher resolution images (at least 800x800px)',
-            affectedSample: ['Phone Case', 'Screen Protector', 'Wireless Earbuds']
-          }
-        ];
-        
-        setFeeds(demoFeeds);
-        setProducts(demoProducts);
-        setProductIssues(demoIssues);
-        setLoading(false);
-      }, 1000);
-    } catch (error) {
-      console.error('Error fetching feed data:', error);
-      setLoading(false);
+      const formData = new FormData();
+      formData.append('file', feedFile);
+      formData.append('feedType', feedType);
+      
+      return await api.merchant.uploadFeed(selectedMerchant, formData);
+    },
+    {
+      onSuccess: () => {
+        // Invalidate and refetch feeds data
+        queryClient.invalidateQueries(['merchantFeeds', selectedMerchant]);
+        setUploadDialogOpen(false);
+        setFeedFile(null);
+      }
     }
-  };
-  
-  // Handle merchant account change
-  const handleMerchantAccountChange = (merchantId) => {
-    setSelectedMerchantId(merchantId);
-    fetchFeedData(merchantId);
-  };
-  
-  // Handle feed refresh
-  const handleRefreshFeed = () => {
-    if (selectedMerchantId) {
-      fetchFeedData(selectedMerchantId);
-    }
-  };
-  
+  );
+
   // Handle tab change
   const handleTabChange = (event, newValue) => {
-    setTabValue(newValue);
+    setActiveTab(newValue);
   };
-  
-  // Handle product search
-  const handleSearch = (event) => {
-    setSearchTerm(event.target.value);
+
+  // Handle merchant change
+  const handleMerchantChange = (event) => {
+    setSelectedMerchant(event.target.value);
+    setPage(1);
   };
-  
-  // Handle feed upload dialog
+
+  // Handle file selection
+  const handleFileSelect = (event) => {
+    setFeedFile(event.target.files[0]);
+  };
+
+  // Handle dialog open
   const handleOpenUploadDialog = () => {
     setUploadDialogOpen(true);
   };
-  
+
+  // Handle dialog close
   const handleCloseUploadDialog = () => {
     setUploadDialogOpen(false);
+    setFeedFile(null);
   };
-  
-  // Simulate feed upload
-  const handleFeedUpload = () => {
-    setUploadLoading(true);
-    
-    // Simulate API call for upload
-    setTimeout(() => {
-      setUploadLoading(false);
-      setUploadDialogOpen(false);
-      
-      // Refresh feed data after upload
-      fetchFeedData(selectedMerchantId);
-    }, 2000);
+
+  // Handle feed upload
+  const handleUploadFeed = () => {
+    uploadFeedMutation.mutate();
   };
-  
-  // Get the selected merchant account
-  const selectedMerchant = merchantAccounts.find(m => m.id === selectedMerchantId);
-  
-  // Filter products based on search term
-  const filteredProducts = products.filter(product => 
-    product.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    product.brand.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    product.id.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-  
-  if (loading && !selectedMerchant) {
+
+  // Render status chip
+  const renderStatusChip = (status) => {
+    switch(status.toLowerCase()) {
+      case 'approved':
+        return <Chip icon={<CheckIcon />} label="Approved" color="success" size="small" />;
+      case 'disapproved':
+        return <Chip icon={<ErrorIcon />} label="Disapproved" color="error" size="small" />;
+      case 'pending':
+        return <Chip icon={<WarningIcon />} label="Pending" color="info" size="small" />;
+      default:
+        return <Chip label={status} size="small" />;
+    }
+  };
+
+  // If loading initial merchant accounts
+  if (isLoadingMerchants) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '70vh' }}>
-        <CircularProgress />
-      </Box>
+      <Layout title="Merchant Feed Dashboard">
+        <Box display="flex" justifyContent="center" alignItems="center" minHeight="80vh">
+          <CircularProgress />
+        </Box>
+      </Layout>
     );
   }
-  
-  const calculateApprovalRate = (approved, total) => {
-    return total > 0 ? (approved / total) * 100 : 0;
-  };
-  
+
+  // If error loading merchants
+  if (merchantError) {
+    return (
+      <Layout title="Merchant Feed Dashboard">
+        <Alert severity="error">
+          Error loading Merchant Center accounts. Please check your API configuration and try again.
+        </Alert>
+      </Layout>
+    );
+  }
+
   return (
-    <Box sx={{ py: 3 }}>
-      <Typography variant="h4" component="h1" sx={{ mb: 4, display: 'flex', alignItems: 'center' }}>
-        <MerchantIcon sx={{ mr: 1 }} />
-        Merchant Center Feed Management
-      </Typography>
-      
-      {/* Merchant Account Selector */}
-      <Box sx={{ mb: 4 }}>
-        <Grid container spacing={3}>
-          {merchantAccounts.map((merchant) => (
-            <Grid item xs={12} md={6} key={merchant.id}>
-              <Card 
-                sx={{ 
-                  cursor: 'pointer',
-                  border: merchant.id === selectedMerchantId ? `2px solid ${merchant.accountStatus === 'ACTIVE' ? '#4caf50' : '#ff9800'}` : 'none',
-                  boxShadow: merchant.id === selectedMerchantId ? 3 : 1
-                }}
-                onClick={() => handleMerchantAccountChange(merchant.id)}
+    <Layout title="Merchant Feed Dashboard">
+      <Box mb={4}>
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} sm={6}>
+            <Typography variant="h4" component="h1" gutterBottom>
+              Merchant Feed Dashboard
+            </Typography>
+          </Grid>
+          <Grid item xs={12} sm={6} container justifyContent="flex-end">
+            <FormControl variant="outlined" sx={{ minWidth: 200 }}>
+              <InputLabel id="merchant-select-label">Merchant Account</InputLabel>
+              <Select
+                labelId="merchant-select-label"
+                id="merchant-select"
+                value={selectedMerchant}
+                onChange={handleMerchantChange}
+                label="Merchant Account"
               >
-                <CardContent>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-                    <Typography variant="h6" component="div">
-                      {merchant.name}
-                    </Typography>
-                    <Chip 
-                      label={merchant.accountStatus} 
-                      color={merchant.accountStatus === 'ACTIVE' ? 'success' : 'warning'}
-                      size="small"
-                    />
-                  </Box>
-                  
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    {merchant.domain}
-                  </Typography>
-                  
-                  <Box sx={{ mt: 2 }}>
-                    <Grid container spacing={2}>
-                      <Grid item xs={6}>
-                        <Typography variant="body2" color="text.secondary">
-                          Total Products
-                        </Typography>
-                        <Typography variant="h6">
-                          {merchant.totalProducts}
-                        </Typography>
-                      </Grid>
-                      
-                      <Grid item xs={6}>
-                        <Typography variant="body2" color="text.secondary">
-                          Approval Rate
-                        </Typography>
-                        <Typography variant="h6">
-                          {calculateApprovalRate(merchant.approvedProducts, merchant.totalProducts).toFixed(1)}%
-                        </Typography>
-                      </Grid>
-                    </Grid>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
+                {merchantAccountsData.map((account) => (
+                  <MenuItem key={account.id} value={account.id}>
+                    {account.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<UploadIcon />}
+              onClick={handleOpenUploadDialog}
+              sx={{ ml: 2 }}
+            >
+              Upload Feed
+            </Button>
+          </Grid>
         </Grid>
       </Box>
-      
-      {/* Selected Merchant Dashboard */}
-      {selectedMerchant && (
-        <>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-            <Typography variant="h5">
-              {selectedMerchant.name} Dashboard
-            </Typography>
-            
-            <Box>
-              <Button 
-                variant="outlined" 
-                startIcon={<UploadIcon />}
-                onClick={handleOpenUploadDialog}
-                sx={{ mr: 1 }}
-              >
-                Upload Feed
-              </Button>
-              <Button 
-                variant="outlined" 
-                startIcon={<RefreshIcon />}
-                onClick={handleRefreshFeed}
-                disabled={loading}
-              >
-                Refresh Data
-              </Button>
-            </Box>
-          </Box>
-          
-          {/* Product Status Summary */}
-          <Paper sx={{ p: 3, mb: 4 }}>
-            <Typography variant="h6" gutterBottom>
-              Product Status Summary
-            </Typography>
-            
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={3}>
-                <Card sx={{ backgroundColor: '#e8f5e9', height: '100%' }}>
-                  <CardContent>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      Approved Products
-                    </Typography>
-                    <Typography variant="h4" sx={{ color: '#2e7d32' }}>
-                      {selectedMerchant.approvedProducts}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {calculateApprovalRate(selectedMerchant.approvedProducts, selectedMerchant.totalProducts).toFixed(1)}% of total
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-              
-              <Grid item xs={12} md={3}>
-                <Card sx={{ backgroundColor: '#ffebee', height: '100%' }}>
-                  <CardContent>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      Disapproved Products
-                    </Typography>
-                    <Typography variant="h4" sx={{ color: '#c62828' }}>
-                      {selectedMerchant.disapprovedProducts}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {calculateApprovalRate(selectedMerchant.disapprovedProducts, selectedMerchant.totalProducts).toFixed(1)}% of total
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-              
-              <Grid item xs={12} md={3}>
-                <Card sx={{ backgroundColor: '#fff8e1', height: '100%' }}>
-                  <CardContent>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      Pending Products
-                    </Typography>
-                    <Typography variant="h4" sx={{ color: '#f57c00' }}>
-                      {selectedMerchant.pendingProducts}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {calculateApprovalRate(selectedMerchant.pendingProducts, selectedMerchant.totalProducts).toFixed(1)}% of total
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-              
-              <Grid item xs={12} md={3}>
-                <Card sx={{ backgroundColor: '#f3f4f6', height: '100%' }}>
-                  <CardContent>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      Total Products
-                    </Typography>
-                    <Typography variant="h4">
-                      {selectedMerchant.totalProducts}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Across all feeds
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-            </Grid>
-          </Paper>
-          
-          {/* Tabs for Feed Info, Products, and Issues */}
-          <Box sx={{ mb: 3 }}>
-            <Tabs 
-              value={tabValue} 
-              onChange={handleTabChange} 
-              variant="fullWidth"
-              sx={{ borderBottom: 1, borderColor: 'divider' }}
-            >
-              <Tab label="Feed Information" />
-              <Tab label="Products" />
-              <Tab label="Product Issues" />
-            </Tabs>
-          </Box>
-          
-          {/* Feed Information Tab */}
-          {tabValue === 0 && (
-            <Paper sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom>
-                Product Feeds
-              </Typography>
-              
-              {loading ? (
-                <CircularProgress sx={{ display: 'block', mx: 'auto', my: 4 }} />
-              ) : (
-                <TableContainer>
-                  <Table>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Feed Name</TableCell>
-                        <TableCell>Type</TableCell>
-                        <TableCell>Last Upload</TableCell>
-                        <TableCell>Items</TableCell>
-                        <TableCell>Status</TableCell>
-                        <TableCell>Actions</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {feeds.map((feed) => (
-                        <TableRow key={feed.id}>
-                          <TableCell>{feed.name}</TableCell>
-                          <TableCell>
-                            <Chip 
-                              label={feed.feedType} 
-                              size="small"
-                              color={
-                                feed.feedType === 'PRIMARY' ? 'primary' :
-                                feed.feedType === 'SUPPLEMENTAL' ? 'secondary' : 'default'
-                              }
-                            />
-                          </TableCell>
-                          <TableCell>
-                            {new Date(feed.lastUploadDate).toLocaleDateString()} {new Date(feed.lastUploadDate).toLocaleTimeString()}
-                          </TableCell>
-                          <TableCell>
-                            {feed.itemsSuccessful} / {feed.itemsTotal} successful
-                            <LinearProgress 
-                              variant="determinate" 
-                              value={(feed.itemsSuccessful / feed.itemsTotal) * 100}
-                              sx={{ 
-                                mt: 1,
-                                backgroundColor: '#f5f5f5',
-                                '& .MuiLinearProgress-bar': {
-                                  backgroundColor: 
-                                    feed.itemsWithErrors > 0 ? '#f44336' :
-                                    feed.itemsWithWarnings > 0 ? '#ff9800' : '#4caf50'
-                                }
-                              }}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Chip 
-                              label={feed.processingStatus} 
-                              size="small"
-                              color={
-                                feed.processingStatus === 'SUCCESS' ? 'success' :
-                                feed.processingStatus === 'PROCESSING' ? 'info' :
-                                feed.processingStatus === 'FAILURE' ? 'error' : 'default'
-                              }
-                              icon={
-                                feed.processingStatus === 'SUCCESS' ? <CheckIcon /> :
-                                feed.processingStatus === 'PROCESSING' ? <ScheduleIcon /> :
-                                feed.processingStatus === 'FAILURE' ? <ErrorIcon /> : null
-                              }
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Button size="small" color="primary">
-                              View Details
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              )}
-            </Paper>
-          )}
-          
-          {/* Products Tab */}
-          {tabValue === 1 && (
-            <Paper sx={{ p: 3 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                <Typography variant="h6">
-                  Products
+
+      {/* Account Summary Cards */}
+      {isLoadingSummary ? (
+        <LinearProgress sx={{ mb: 4 }} />
+      ) : accountSummaryData ? (
+        <Grid container spacing={2} sx={{ mb: 4 }}>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent>
+                <Typography color="textSecondary" gutterBottom>
+                  Total Products
                 </Typography>
-                
-                <TextField
-                  placeholder="Search products..."
-                  variant="outlined"
-                  size="small"
-                  value={searchTerm}
-                  onChange={handleSearch}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchIcon />
-                      </InputAdornment>
-                    ),
-                    endAdornment: searchTerm && (
-                      <InputAdornment position="end">
-                        <IconButton size="small" onClick={() => setSearchTerm('')}>
-                          ✕
-                        </IconButton>
-                      </InputAdornment>
-                    )
-                  }}
-                  sx={{ width: 300 }}
-                />
-              </Box>
-              
-              {loading ? (
-                <CircularProgress sx={{ display: 'block', mx: 'auto', my: 4 }} />
-              ) : filteredProducts.length === 0 ? (
-                <Alert severity="info">No products match your search criteria.</Alert>
-              ) : (
-                <TableContainer>
-                  <Table>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Product</TableCell>
-                        <TableCell>Brand</TableCell>
-                        <TableCell>Price</TableCell>
-                        <TableCell>Availability</TableCell>
-                        <TableCell>Status</TableCell>
-                        <TableCell>Actions</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {filteredProducts.map((product) => (
-                        <TableRow key={product.id}>
-                          <TableCell>
-                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              <Box 
-                                component="img" 
-                                src={product.imageLink} 
-                                alt={product.title}
-                                sx={{ 
-                                  width: 50, 
-                                  height: 50, 
-                                  objectFit: 'contain',
-                                  mr: 2,
-                                  border: '1px solid #eee'
-                                }}
-                                onError={(e) => {
-                                  e.target.src = 'https://via.placeholder.com/50';
-                                }}
-                              />
-                              <Box>
-                                <Typography variant="body2" component="div">
-                                  {product.title}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                  ID: {product.id}
-                                </Typography>
-                              </Box>
-                            </Box>
-                          </TableCell>
-                          <TableCell>{product.brand}</TableCell>
-                          <TableCell>
-                            {product.price.value.toFixed(2)} {product.price.currency}
-                          </TableCell>
-                          <TableCell>{product.availability}</TableCell>
-                          <TableCell>
-                            <Chip 
-                              label={product.status} 
-                              size="small"
-                              color={
-                                product.status === 'approved' ? 'success' :
-                                product.status === 'pending' ? 'warning' :
-                                'error'
-                              }
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Button size="small" color="primary">
-                              View Details
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              )}
-            </Paper>
-          )}
-          
-          {/* Product Issues Tab */}
-          {tabValue === 2 && (
-            <Paper sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom>
-                Product Issues
-              </Typography>
-              
-              {loading ? (
-                <CircularProgress sx={{ display: 'block', mx: 'auto', my: 4 }} />
-              ) : productIssues.length === 0 ? (
-                <Alert severity="success" sx={{ my: 2 }}>No product issues found. All products are compliant.</Alert>
-              ) : (
-                <Grid container spacing={3}>
-                  {productIssues.map((issue) => (
-                    <Grid item xs={12} key={issue.code}>
-                      <Card 
-                        variant="outlined"
-                        sx={{ 
-                          borderLeft: 4,
-                          borderColor: issue.severity === 'error' ? '#f44336' : '#ff9800'
-                        }}
-                      >
-                        <CardContent>
-                          <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
-                            {issue.severity === 'error' ? (
-                              <ErrorIcon color="error" sx={{ mr: 2, mt: 0.5 }} />
-                            ) : (
-                              <WarningIcon color="warning" sx={{ mr: 2, mt: 0.5 }} />
-                            )}
-                            
-                            <Box sx={{ flex: 1 }}>
-                              <Typography variant="subtitle1" gutterBottom>
-                                {issue.description}
-                              </Typography>
-                              
-                              <Typography variant="body2" gutterBottom>
-                                Affects <strong>{issue.count}</strong> products
-                              </Typography>
-                              
-                              <Divider sx={{ my: 1 }} />
-                              
-                              <Typography variant="body2" color="text.secondary" gutterBottom>
-                                <strong>Resolution:</strong> {issue.resolution}
-                              </Typography>
-                              
-                              <Typography variant="caption" color="text.secondary">
-                                <strong>Examples:</strong> {issue.affectedSample.join(', ')}
-                              </Typography>
-                            </Box>
-                            
-                            <Chip 
-                              label={`${issue.count} affected`}
-                              color={issue.severity === 'error' ? 'error' : 'warning'}
-                              size="small"
-                              sx={{ ml: 2 }}
-                            />
-                          </Box>
-                        </CardContent>
-                      </Card>
-                    </Grid>
+                <Typography variant="h4" component="div">
+                  {accountSummaryData.totalProducts}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent>
+                <Typography color="textSecondary" gutterBottom>
+                  Approved Products
+                </Typography>
+                <Typography variant="h4" component="div" color="success.main">
+                  {accountSummaryData.approvedProducts}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent>
+                <Typography color="textSecondary" gutterBottom>
+                  Disapproved Products
+                </Typography>
+                <Typography variant="h4" component="div" color="error.main">
+                  {accountSummaryData.disapprovedProducts}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent>
+                <Typography color="textSecondary" gutterBottom>
+                  Pending Products
+                </Typography>
+                <Typography variant="h4" component="div" color="info.main">
+                  {accountSummaryData.pendingProducts}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      ) : null}
+
+      {/* Tabs */}
+      <Paper sx={{ mb: 4 }}>
+        <Tabs
+          value={activeTab}
+          onChange={handleTabChange}
+          indicatorColor="primary"
+          textColor="primary"
+        >
+          <Tab label="Feeds" />
+          <Tab label="Products" />
+          <Tab label="Issues" />
+        </Tabs>
+
+        {/* Feeds Tab */}
+        <TabPanel value={activeTab} index={0}>
+          {isLoadingFeeds ? (
+            <LinearProgress />
+          ) : feedsData.length > 0 ? (
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Feed Name</TableCell>
+                    <TableCell>Type</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Items</TableCell>
+                    <TableCell>Success</TableCell>
+                    <TableCell>Warnings</TableCell>
+                    <TableCell>Errors</TableCell>
+                    <TableCell>Last Updated</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {feedsData.map((feed) => (
+                    <TableRow key={feed.id}>
+                      <TableCell>{feed.name}</TableCell>
+                      <TableCell>{feed.feedType}</TableCell>
+                      <TableCell>
+                        {feed.status === 'ACTIVE' ? (
+                          <Chip label="Active" color="success" size="small" />
+                        ) : (
+                          <Chip label={feed.status} color="default" size="small" />
+                        )}
+                      </TableCell>
+                      <TableCell>{feed.itemsTotal}</TableCell>
+                      <TableCell>{feed.itemsSuccessful}</TableCell>
+                      <TableCell>{feed.itemsWithWarnings}</TableCell>
+                      <TableCell>{feed.itemsWithErrors}</TableCell>
+                      <TableCell>{feed.lastUploadDate}</TableCell>
+                    </TableRow>
                   ))}
-                </Grid>
-              )}
-            </Paper>
+                </TableBody>
+              </Table>
+            </TableContainer>
+          ) : (
+            <Alert severity="info">
+              No feeds found for this merchant account. Upload a product feed to get started.
+            </Alert>
           )}
-        </>
-      )}
-      
-      {/* Upload Feed Dialog */}
+        </TabPanel>
+
+        {/* Products Tab */}
+        <TabPanel value={activeTab} index={1}>
+          <Box display="flex" justifyContent="space-between" mb={2}>
+            <FormControl variant="outlined" size="small">
+              <InputLabel id="product-filter-label">Filter Status</InputLabel>
+              <Select
+                labelId="product-filter-label"
+                id="product-filter"
+                value={productFilter}
+                onChange={(e) => {
+                  setProductFilter(e.target.value);
+                  setPage(1);
+                }}
+                label="Filter Status"
+                startAdornment={<FilterIcon fontSize="small" sx={{ mr: 1 }} />}
+              >
+                <MenuItem value="all">All Products</MenuItem>
+                <MenuItem value="approved">Approved</MenuItem>
+                <MenuItem value="disapproved">Disapproved</MenuItem>
+                <MenuItem value="pending">Pending</MenuItem>
+              </Select>
+            </FormControl>
+            <Button
+              startIcon={<RefreshIcon />}
+              onClick={() => refetchProducts()}
+              disabled={isLoadingProducts}
+            >
+              Refresh
+            </Button>
+          </Box>
+
+          {isLoadingProducts ? (
+            <LinearProgress />
+          ) : productsData.products.length > 0 ? (
+            <>
+              <TableContainer sx={{ mb: 2 }}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Product</TableCell>
+                      <TableCell>Brand</TableCell>
+                      <TableCell>Price</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell>Issues</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {productsData.products.map((product) => (
+                      <TableRow key={product.id}>
+                        <TableCell>
+                          <Box display="flex" alignItems="center">
+                            {product.imageLink && (
+                              <Box
+                                component="img"
+                                src={product.imageLink}
+                                alt={product.title}
+                                sx={{ width: 40, height: 40, mr: 2, objectFit: 'contain' }}
+                              />
+                            )}
+                            <Typography variant="body2">
+                              {product.title}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell>{product.brand || 'N/A'}</TableCell>
+                        <TableCell>
+                          {product.price.currency} {product.price.value}
+                        </TableCell>
+                        <TableCell>
+                          {renderStatusChip(product.status)}
+                        </TableCell>
+                        <TableCell>
+                          {product.issues.length > 0 ? (
+                            <Chip 
+                              icon={product.issues.some(i => i.severity === 'error') ? <ErrorIcon /> : <WarningIcon />}
+                              label={`${product.issues.length} ${product.issues.length === 1 ? 'issue' : 'issues'}`}
+                              color={product.issues.some(i => i.severity === 'error') ? 'error' : 'warning'}
+                              size="small"
+                            />
+                          ) : (
+                            <Chip icon={<CheckIcon />} label="No issues" color="success" size="small" />
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              
+              <Box display="flex" justifyContent="space-between" alignItems="center">
+                <Typography variant="body2">
+                  Showing {(page - 1) * 50 + 1} - {Math.min(page * 50, productsData.pagination.total)} of {productsData.pagination.total} products
+                </Typography>
+                <Box>
+                  <Button 
+                    disabled={page === 1} 
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                  >
+                    Previous
+                  </Button>
+                  <Button 
+                    disabled={!productsData.pagination.hasMore} 
+                    onClick={() => setPage(p => p + 1)}
+                  >
+                    Next
+                  </Button>
+                </Box>
+              </Box>
+            </>
+          ) : (
+            <Alert severity="info">
+              No products found matching the selected criteria.
+            </Alert>
+          )}
+        </TabPanel>
+
+        {/* Issues Tab */}
+        <TabPanel value={activeTab} index={2}>
+          {isLoadingIssues ? (
+            <LinearProgress />
+          ) : issuesData.length > 0 ? (
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Issue</TableCell>
+                    <TableCell>Severity</TableCell>
+                    <TableCell>Affected Products</TableCell>
+                    <TableCell>Resolution</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {issuesData.map((issue) => (
+                    <TableRow key={issue.code}>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight="bold">
+                          {issue.code}
+                        </Typography>
+                        <Typography variant="body2" color="textSecondary">
+                          {issue.description}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        {issue.severity === 'error' ? (
+                          <Chip icon={<ErrorIcon />} label="Error" color="error" size="small" />
+                        ) : (
+                          <Chip icon={<WarningIcon />} label="Warning" color="warning" size="small" />
+                        )}
+                      </TableCell>
+                      <TableCell>{issue.count}</TableCell>
+                      <TableCell>
+                        {issue.resolution ? (
+                          <Typography variant="body2">
+                            {issue.resolution}
+                          </Typography>
+                        ) : (
+                          <Typography variant="body2" color="textSecondary">
+                            No resolution available
+                          </Typography>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          ) : (
+            <Alert severity="success">
+              No issues found! All products are compliant.
+            </Alert>
+          )}
+        </TabPanel>
+      </Paper>
+
+      {/* Upload Dialog */}
       <Dialog open={uploadDialogOpen} onClose={handleCloseUploadDialog}>
         <DialogTitle>Upload Product Feed</DialogTitle>
         <DialogContent>
-          <Box sx={{ my: 2 }}>
-            <Typography variant="body1" gutterBottom>
-              Select feed type and file to upload
-            </Typography>
-            
-            <Grid container spacing={2} sx={{ mt: 1 }}>
-              <Grid item xs={12}>
-                <TextField
-                  select
-                  label="Feed Type"
-                  fullWidth
-                  defaultValue="PRIMARY"
-                >
-                  <MenuItem value="PRIMARY">Primary Feed</MenuItem>
-                  <MenuItem value="SUPPLEMENTAL">Supplemental Feed</MenuItem>
-                  <MenuItem value="PRICE">Price Feed</MenuItem>
-                  <MenuItem value="INVENTORY">Inventory Feed</MenuItem>
-                </TextField>
-              </Grid>
-              
-              <Grid item xs={12}>
-                <Button
-                  variant="outlined"
-                  component="label"
-                  startIcon={<UploadIcon />}
-                  fullWidth
-                >
-                  Select File
-                  <input
-                    type="file"
-                    hidden
-                  />
-                </Button>
-              </Grid>
-              
-              <Grid item xs={12}>
-                <Alert severity="info">
-                  Supported file formats: CSV, TSV, XML. Maximum file size: 100MB.
-                </Alert>
-              </Grid>
-            </Grid>
+          <DialogContentText sx={{ mb: 2 }}>
+            Select a product feed file to upload to your Merchant Center account. 
+            Supported formats: CSV, TSV, TXT, XML.
+          </DialogContentText>
+          <FormControl fullWidth margin="normal">
+            <InputLabel id="feed-type-label">Feed Type</InputLabel>
+            <Select
+              labelId="feed-type-label"
+              value={feedType}
+              onChange={(e) => setFeedType(e.target.value)}
+              label="Feed Type"
+            >
+              <MenuItem value="PRIMARY">Primary Feed</MenuItem>
+              <MenuItem value="SUPPLEMENTAL">Supplemental Feed</MenuItem>
+              <MenuItem value="PRICE">Price Feed</MenuItem>
+              <MenuItem value="INVENTORY">Inventory Feed</MenuItem>
+            </Select>
+          </FormControl>
+          <Box sx={{ mt: 2 }}>
+            <Button
+              variant="contained"
+              component="label"
+              startIcon={<UploadIcon />}
+              fullWidth
+            >
+              Select File
+              <input
+                type="file"
+                hidden
+                onChange={handleFileSelect}
+                accept=".csv,.tsv,.txt,.xml"
+              />
+            </Button>
+            {feedFile && (
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                Selected file: {feedFile.name}
+              </Typography>
+            )}
           </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseUploadDialog}>Cancel</Button>
           <Button 
-            onClick={handleFeedUpload}
-            variant="contained"
-            disabled={uploadLoading}
-            startIcon={uploadLoading ? <CircularProgress size={20} /> : null}
+            onClick={handleUploadFeed}
+            disabled={!feedFile || uploadFeedMutation.isLoading}
+            variant="contained" 
+            color="primary"
           >
-            {uploadLoading ? 'Uploading...' : 'Upload Feed'}
+            {uploadFeedMutation.isLoading ? 'Uploading...' : 'Upload'}
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </Layout>
   );
 };
 

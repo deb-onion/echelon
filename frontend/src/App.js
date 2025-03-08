@@ -11,6 +11,55 @@ import MerchantFeedDashboard from './pages/MerchantFeedDashboard';
 import Layout from './components/Layout';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import api from './services/api';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
+import CssBaseline from '@mui/material/CssBaseline';
+import Login from './pages/Login';
+
+// Create a theme
+const theme = createTheme({
+  palette: {
+    mode: 'light',
+    primary: {
+      main: '#1976d2',
+    },
+    secondary: {
+      main: '#dc004e',
+    },
+    background: {
+      default: '#f5f5f5',
+      paper: '#ffffff',
+    },
+  },
+  typography: {
+    fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
+    h4: {
+      fontWeight: 600,
+    },
+    h5: {
+      fontWeight: 500,
+    },
+    h6: {
+      fontWeight: 500,
+    },
+  },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          textTransform: 'none',
+        },
+      },
+    },
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          borderRadius: 8,
+          boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
+        },
+      },
+    },
+  },
+});
 
 // Protected route component
 const ProtectedRoute = ({ children }) => {
@@ -25,7 +74,7 @@ const ProtectedRoute = ({ children }) => {
   }
   
   if (!isAuthenticated) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/login" />;
   }
   
   return children;
@@ -43,67 +92,31 @@ function AppRoutes() {
   
   return (
     <Routes>
-      <Route path="/" element={<AccountSelection onSelectAccount={handleAccountSelect} />} />
-      
-      <Route path="/dashboard" element={
+      <Route path="/login" element={<Login />} />
+      <Route path="/" element={
         <ProtectedRoute>
-          <Layout>
-            <Dashboard />
-          </Layout>
+          <Layout />
         </ProtectedRoute>
-      } />
-      
-      <Route path="/campaign/:campaignId" element={
-        <ProtectedRoute>
-          <Layout>
-            <CampaignDetails />
-          </Layout>
-        </ProtectedRoute>
-      } />
-      
-      <Route path="/recommendations" element={
-        <ProtectedRoute>
-          <Layout>
-            <Recommendations />
-          </Layout>
-        </ProtectedRoute>
-      } />
-
-      <Route path="/new-shopping-campaign" element={
-        <ProtectedRoute>
-          <Layout>
-            <ShoppingCampaignCreate />
-          </Layout>
-        </ProtectedRoute>
-      } />
-      
-      <Route path="/new-performance-max" element={
-        <ProtectedRoute>
-          <Layout>
-            <PerformanceMaxCreate />
-          </Layout>
-        </ProtectedRoute>
-      } />
-      
-      <Route path="/merchant-feed" element={
-        <ProtectedRoute>
-          <Layout>
-            <MerchantFeedDashboard />
-          </Layout>
-        </ProtectedRoute>
-      } />
-      
-      {/* Catch-all redirect */}
-      <Route path="*" element={<Navigate to="/" replace />} />
+      }>
+        <Route index element={<AccountSelection onSelectAccount={handleAccountSelect} />} />
+        <Route path="dashboard" element={<Dashboard />} />
+        <Route path="campaigns/:campaignId" element={<CampaignDetails />} />
+        <Route path="shopping-campaign/create" element={<ShoppingCampaignCreate />} />
+        <Route path="pmax-campaign/create" element={<PerformanceMaxCreate />} />
+        <Route path="merchant-feed" element={<MerchantFeedDashboard />} />
+      </Route>
     </Routes>
   );
 }
 
 function App() {
   return (
-    <AuthProvider>
-      <AppRoutes />
-    </AuthProvider>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 

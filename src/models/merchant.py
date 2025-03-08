@@ -8,10 +8,10 @@ Merchant Center Models
 Pydantic models for Merchant Center API requests and responses.
 """
 
-from typing import List, Optional, Dict, Any, Union
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 from enum import Enum
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field
 
 
 class FeedType(str, Enum):

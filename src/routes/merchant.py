@@ -11,17 +11,15 @@ API routes for interacting with Google Merchant Center.
 import os
 import logging
 import tempfile
-from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, BackgroundTasks, Request
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, Request
 from fastapi.responses import JSONResponse
 
 from src.core.merchant_center_client import MerchantCenterClient
-from src.core.authentication import get_authenticated_client
 from src.models.merchant import (
     MerchantAccount,
     MerchantAccountSummary,
     ProductFeed,
-    Product,
     ProductsResponse,
     AggregatedIssue,
     FeedType,
@@ -53,14 +51,13 @@ async def get_merchant_client(
     Returns:
         Initialized MerchantCenterClient
     """
-    config_dir = os.environ.get("GOOGLE_ADS_CONFIG_DIR", "./google-ads.yaml")
     try:
-        # Create and return a new client
-        return MerchantCenterClient(config_dir=config_dir, merchant_id=merchant_id)
+        # Create a new client with the merchant ID
+        return MerchantCenterClient(merchant_id=merchant_id)
     except Exception as e:
         logger.error(f"Error creating Merchant Center client: {str(e)}")
         raise HTTPException(
-            status_code=500,
+            status_code=500, 
             detail=f"Failed to initialize Merchant Center client: {str(e)}"
         )
 
@@ -75,8 +72,8 @@ async def get_merchants():
     """Get all Merchant Center accounts."""
     try:
         # Use a temporary client without a specific merchant ID
-        config_dir = os.environ.get("GOOGLE_ADS_CONFIG_DIR", "./google-ads.yaml")
-        client = MerchantCenterClient(config_dir=config_dir, merchant_id="0")
+        # In a real implementation, you would use proper authentication
+        client = MerchantCenterClient()
         
         # Get all merchant accounts
         return client.get_merchant_accounts()
@@ -183,7 +180,6 @@ async def get_product_issues(
 )
 async def upload_feed(
     merchant_id: str,
-    background_tasks: BackgroundTasks,
     feed_file: UploadFile = File(...),
     feed_type: FeedType = Form(FeedType.PRIMARY),
     target_countries: Optional[List[str]] = Form(["US"]),
