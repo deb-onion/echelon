@@ -5,6 +5,9 @@ import Dashboard from './pages/Dashboard';
 import CampaignDetails from './pages/CampaignDetails';
 import Recommendations from './pages/Recommendations';
 import AccountSelection from './pages/AccountSelection';
+import ShoppingCampaignCreate from './pages/ShoppingCampaignCreate';
+import PerformanceMaxCreate from './pages/PerformanceMaxCreate';
+import MerchantFeedDashboard from './pages/MerchantFeedDashboard';
 import Layout from './components/Layout';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import api from './services/api';
@@ -62,6 +65,30 @@ function AppRoutes() {
         <ProtectedRoute>
           <Layout>
             <Recommendations />
+          </Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/new-shopping-campaign" element={
+        <ProtectedRoute>
+          <Layout>
+            <ShoppingCampaignCreate />
+          </Layout>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/new-performance-max" element={
+        <ProtectedRoute>
+          <Layout>
+            <PerformanceMaxCreate />
+          </Layout>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/merchant-feed" element={
+        <ProtectedRoute>
+          <Layout>
+            <MerchantFeedDashboard />
           </Layout>
         </ProtectedRoute>
       } />

@@ -1,7 +1,5 @@
 # ECHELON: Google Ads Management System
 
-![Echelon Banner](https://via.placeholder.com/1200x300/0073e6/ffffff?text=ECHELON)
-
 ## Overview
 
 Echelon is a comprehensive Google Ads management platform designed to provide a streamlined interface for managing Google Ads accounts without directly accessing the Google Ads UI. This application combines a React frontend with a FastAPI backend to deliver powerful advertising management capabilities alongside AI-driven optimization suggestions.
@@ -371,4 +369,4 @@ This project is proprietary and confidential. Unauthorized copying, transferring
 
 ---
 
-Created with 💙 for streamlining Google Ads management 
+Created for streamlining Google Ads management 

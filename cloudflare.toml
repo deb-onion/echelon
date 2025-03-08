@@ -1,0 +1,12 @@
+[build]
+  command = "cd frontend && npm ci && npm run build"
+  publish = "frontend/build"
+
+[build.environment]
+  NODE_VERSION = "16"
+
+[env.production]
+  REACT_APP_API_URL = "http://localhost:8000"
+
+[env.staging]
+  REACT_APP_API_URL = "http://localhost:8000" 
