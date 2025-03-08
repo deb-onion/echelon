@@ -1,0 +1,13 @@
+[build]
+command = "./build.sh"
+output_directory = "frontend/build"
+
+[site]
+bucket = "frontend/build"
+
+[build.environment]
+NODE_VERSION = "18"
+
+# Skip Python dependency installation completely
+[build.environment.SKIP_PYTHON_DEPENDENCY_INSTALLATION]
+value = "true" 
