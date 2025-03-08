@@ -32,7 +32,7 @@ from src.routes import (
     ecommerce,
     audit,
     optimization,
-    merchant  # Add this import for Merchant Center routes
+    merchant  # Merchant Center routes
 )
 
 # Create FastAPI app
